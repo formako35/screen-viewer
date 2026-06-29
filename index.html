@@ -161,7 +161,10 @@
   async function fetchLatest() {
     try {
       // Cache-bust so the browser never serves stale data
-      const res  = await fetch(GIST_RAW_URL + "?t=" + Date.now());
+      const res = await fetch(GIST_RAW_URL + "?t=" + Date.now(), {
+  cache: "no-store",
+  headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" }
+});
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
 
