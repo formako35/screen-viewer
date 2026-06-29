@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Screen Viewer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0f0f0f;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0 18px;
+    border-bottom: 1px solid #2a2a2a;
+    margin-bottom: 20px;
+  }
+
+  h1 { font-size: 1.2rem; font-weight: 600; letter-spacing: .03em; color: #fff; }
+  h1 span { color: #4ade80; }
+
+  #status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: .85rem;
+    color: #888;
+  }
+
+  #dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 8px #4ade80;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  #dot.stale { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+  #dot.error { background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: none; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: .35; }
+  }
+
+  #frame {
+    width: 100%;
+    max-width: 1200px;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #screen-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: opacity .15s ease;
+  }
+  #screen-img.loading { opacity: .5; }
+
+  #placeholder {
+    color: #444;
+    font-size: 1rem;
+    text-align: center;
+    padding: 60px 20px;
+  }
+  #placeholder svg { margin-bottom: 14px; opacity: .4; }
+
+  footer {
+    margin-top: 16px;
+    font-size: .78rem;
+    color: #555;
+    text-align: center;
+  }
+  footer a { color: #4ade80; text-decoration: none; }
+
+  #ts { font-size: .82rem; color: #666; margin-top: 10px; }
+
+  #flash {
+    position: absolute;
+    inset: 0;
+    background: rgba(74,222,128,.07);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .1s;
+    border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🖥️ Live Screen <span>Viewer</span></h1>
+  <div id="status">
+    <div id="dot"></div>
+    <span id="status-text">Connecting…</span>
+  </div>
+</header>
+
+<div id="frame">
+  <div id="placeholder">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+    </svg>
+    <p>Waiting for first screenshot…</p>
+    <p style="margin-top:6px;font-size:.85rem;color:#333">Make sure screen_uploader.py is running</p>
+  </div>
+  <img id="screen-img" style="display:none" alt="Latest screenshot">
+  <div id="flash"></div>
+</div>
+
+<div id="ts"></div>
+
+<footer>
+  Refreshes automatically every 2 s &nbsp;·&nbsp;
+  Powered by <a href="https://imgbb.com" target="_blank">ImgBB</a> &amp;
+  <a href="https://gist.github.com" target="_blank">GitHub Gist</a>
+</footer>
+
+<script>
+  // ─────────────────────────────────────────────────────────────
+  //  FILL THIS IN:  your raw Gist URL
+  //  Format:  https://gist.githubusercontent.com/YOUR_USERNAME/YOUR_GIST_ID/raw/latest_screenshot.json
+  const GIST_RAW_URL = "YOUR_GIST_RAW_URL_HERE";
+  // ─────────────────────────────────────────────────────────────
+
+  const img       = document.getElementById("screen-img");
+  const placeholder = document.getElementById("placeholder");
+  const dot       = document.getElementById("dot");
+  const statusTxt = document.getElementById("status-text");
+  const tsEl      = document.getElementById("ts");
+  const flash     = document.getElementById("flash");
+
+  let lastUrl     = "";
+  let errorCount  = 0;
+
+  function flashEffect() {
+    flash.style.opacity = "1";
+    setTimeout(() => flash.style.opacity = "0", 150);
+  }
+
+  async function fetchLatest() {
+    try {
+      // Cache-bust so the browser never serves stale data
+      const res  = await fetch(GIST_RAW_URL + "?t=" + Date.now());
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+
+      errorCount = 0;
+      dot.className = "";
+      statusTxt.textContent = "Live";
+
+      if (data.url && data.url !== lastUrl) {
+        lastUrl = data.url;
+
+        img.classList.add("loading");
+        img.onload = () => {
+          img.classList.remove("loading");
+          flashEffect();
+        };
+        img.src = data.url;
+        img.style.display = "block";
+        placeholder.style.display = "none";
+      }
+
+      if (data.ts) {
+        tsEl.textContent = "Last captured: " + data.ts;
+      }
+
+    } catch (e) {
+      errorCount++;
+      if (errorCount >= 3) {
+        dot.className = "error";
+        statusTxt.textContent = "Connection lost";
+      } else {
+        dot.className = "stale";
+        statusTxt.textContent = "Retrying…";
+      }
+      console.warn("Fetch error:", e);
+    }
+  }
+
+  if (GIST_RAW_URL === "YOUR_GIST_RAW_URL_HERE") {
+    statusTxt.textContent = "⚠ Set GIST_RAW_URL in index.html";
+    dot.className = "error";
+  } else {
+    fetchLatest();
+    setInterval(fetchLatest, 2000);
+  }
+</script>
+</body>
+</html>
